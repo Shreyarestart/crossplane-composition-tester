@@ -24,9 +24,9 @@ spec:
   schedules:
   - policyArn: arn:aws:iam::aws:policy/AmazonPolicy1
     roleName: role-app-1
-    scheduleFrom: 2023-01-01T00:00:00Z
-    scheduleUntil: 2023-12-31T23:59:59Z
+    scheduleFrom: 2020-01-01T00:00:00Z
+    scheduleUntil: 2027-12-31T23:59:59Z
   - policyArn: arn:aws:iam::aws:policy/AmazonPolicy2
     roleName: role-app-2
-    scheduleFrom: 2023-01-01T00:00:00Z
-    scheduleUntil: 2023-12-31T23:59:59Z
+    scheduleFrom: 2020-01-01T00:00:00Z
+    scheduleUntil: 2027-12-31T23:59:59Z

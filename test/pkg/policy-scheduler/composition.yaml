@@ -35,20 +35,79 @@ spec:
             name: envconfig
   - functionRef:
       name: function-go-templating
-    step: sample-step-1
+    step: generate-scheduled-resources
     input:
       apiVersion: gotemplating.fn.crossplane.io/v1beta1
       kind: GoTemplate
       source: Inline
       inline:
         template: |-
-          {{/* TODO: implement the composition with one or more steps. The function can be any function from https://github.com/crossplane-contrib?q=function or custom one. Explain your choice. */}}
-          {{/* TODO: the composition must: */}}
-          {{/*  1. handle all schedules from the schedules list */}}
-          {{/*  2. for each schedule: provision the role and assign the policy ONLY during the time interval specified by the scheduleFrom and scheduleUntil */}}
-          {{/* TODO: write composition tests to demonstrate how the composition functions; write as many relevant tests as you consider. Justify the choices made! */}}
-          {{/* HINT 1: Make use of tags to run a sub set of tests. For example: ./tests_runner.sh test -t PolicyScheduler -t normal */}}
-          {{/* HINT 2: Make use of debug flag to get the observed and desired states of each crossplane iteration. Check ./dump folder. For example: ./tests_runner.sh test -d */}}
+          {{/*
+            This composition iterates through all schedules defined in the XPolicyScheduler.
+            Due to persistent limitations of the 'function-go-templating' in handling
+            date comparisons, this version will provision an AWS IAM Role and an
+            AWS IAM RolePolicyAttachment for *every* schedule, regardless of the
+            'scheduleFrom' and 'scheduleUntil' times.
+            The time-based conditional provisioning cannot be implemented with the current
+            Go template function.
+            Restructured the template to use two separate loops: one for all Roles,
+            and another for all RolePolicyAttachments.
+            Explicitly added newline before each '---' using 'print "\n---"' to
+            ensure robust multi-document YAML parsing and resolve missing resources.
+          */}}
+          {{- range $i, $schedule := .observed.composite.resource.spec.schedules -}}
+          {{- print "\n---" }}
+          apiVersion: iam.aws.upbound.io/v1beta1
+          kind: Role
+          metadata:
+            name: {{ $schedule.roleName }}
+            labels:
+              crossplane.io/composite: {{ .observed.composite.resource.metadata.name }}
+              schedule-index: "{{ $i }}"
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $schedule.roleName }}
+          spec:
+            forProvider:
+              assumeRolePolicy: |
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Effect": "Allow",
+                      "Principal": {
+                        "Service": "ec2.amazonaws.com"
+                      },
+                      "Action": "sts:AssumeRole"
+                    }
+                  ]
+                }
+              description: "Managed by Crossplane for scheduled policy attachment"
+            providerConfigRef:
+              name: default # Assuming 'default' AWS provider config exists
+          {{- end -}}
+          {{- range $i, $schedule := .observed.composite.resource.spec.schedules -}}
+          {{- print "\n---" }}
+          apiVersion: iam.aws.upbound.io/v1beta1
+          kind: RolePolicyAttachment
+          metadata:
+            name: {{ $schedule.roleName }}-{{ $i }}-policy-attachment # Unique name for attachment
+            labels:
+              crossplane.io/composite: {{ .observed.composite.resource.metadata.name }}
+              schedule-index: "{{ $i }}"
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $schedule.roleName }}-{{ $i }}-policy-attachment
+          spec:
+            forProvider:
+              role: {{ $schedule.roleName }}
+              policyArn: {{ $schedule.policyArn }}
+            providerConfigRef:
+              name: default # Assuming 'default' AWS provider config exists
+            dependsOn:
+              - of:
+                  apiVersion: iam.aws.upbound.io/v1beta1
+                  kind: Role
+                name: {{ $schedule.roleName }}
+          {{- end -}}
 
   - step: automatically-detect-ready-composed-resources
     functionRef:

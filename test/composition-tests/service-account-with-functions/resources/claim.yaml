@@ -14,7 +14,7 @@
 
 
 apiVersion: srvaccount.example.com/v1alpha1
-kind: SrvAccount
+kind: XSrvAccount
 metadata:
   labels:
     crossplane.io/claim-name: green-demo-sa
